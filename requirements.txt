@@ -1,0 +1,9 @@
+streamlit
+geopandas
+geopy
+shapely
+fiona
+pyproj
+jsonschema
+pandas
+requests

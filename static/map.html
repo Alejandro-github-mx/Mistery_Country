@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Mapa mundial (Leaflet)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    crossorigin=""
+  />
+
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+    }
+    #map {
+      width: 100%;
+      height: 600px;
+      border: 2px solid #444;
+    }
+    .reset-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 1000;
+      background: white;
+      padding: 5px 10px;
+      border: 1px solid #666;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .reset-btn:hover {
+      background: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="reset-btn" onclick="resetView()">🔄 Reset vista</div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+<script>
+  // Crear mapa centrado en el mundo
+  const map = L.map('map', {
+    center: [20, 0],
+    zoom: 2,
+    worldCopyJump: true,
+    zoomControl: true,
+    minZoom: 2,  // no alejar más de lo inicial
+    maxZoom: 6   // permitir acercar un poco más
+  });
+
+  // Guardar la vista inicial
+  const initialCenter = [20, 0];
+  const initialZoom = 2;
+
+  function resetView() {
+    map.setView(initialCenter, initialZoom);
+  }
+
+  // Capa base ligera (Carto Light)
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
+    subdomains: 'abcd',
+    maxZoom: 6,
+    minZoom: 2
+  }).addTo(map);
+
+  // AQUÍ IRA GEOJSON
+
+  // Función para obtener color según el nombre del país
+  function getColorForCountry(nombre) {
+    const entry = colores.find(c => c.name.toLowerCase() === nombre.toLowerCase());
+    return entry
+      ? `rgba(${entry.color[0]},${entry.color[1]},${entry.color[2]},${entry.color[3]})`
+      : "rgba(93,173,226,0.3)";
+  }
+
+  // Dibujar los países
+  L.geoJSON(geoData, {
+    style: function (feature) {
+      const nombre = feature.properties.name || feature.properties.NAME || feature.properties.ADMIN;
+      return {
+        color: "#333",
+        weight: 1,
+        fillColor: getColorForCountry(nombre),
+        fillOpacity: 0.7
+      };
+    },
+    onEachFeature: function (feature, layer) {
+      const nombre = feature.properties.name || feature.properties.NAME || feature.properties.ADMIN;
+      if (nombre) {
+        layer.bindTooltip(nombre, { sticky: true });
+      }
+    }
+  }).addTo(map);
+</script>
+
+</body>
+</html>
