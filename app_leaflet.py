@@ -17,14 +17,12 @@ def normalizar(texto: str) -> str:
         if unicodedata.category(c) != 'Mn'
     )
 
-
 def es_desde_en(nombre_en: str) -> str:
     """Devuelve el nombre en español con capitalización correcta (desde diccionario)."""
     for es, en in paises_es.items():
         if normalizar(en) == normalizar(nombre_en):
             return es
     return nombre_en
-
 
 def en_desde_es(nombre_es: str) -> str:
     """Devuelve el nombre en inglés desde un nombre en español."""
@@ -33,11 +31,9 @@ def en_desde_es(nombre_es: str) -> str:
             return en
     return nombre_es
 
-
 # Diccionarios normalizados (para búsqueda rápida)
 paises_es_norm = {normalizar(k): v for k, v in paises_es.items()}   # es → en
 en_a_es_norm   = {normalizar(v): k for k, v in paises_es.items()}   # en → es
-
 
 # --- Inicialización ---
 if "pais_misterioso" not in st.session_state:
@@ -49,7 +45,11 @@ if "incorrectos" not in st.session_state:
 if "pais_revelado" not in st.session_state:
     st.session_state.pais_revelado = False
 if "pais_input" not in st.session_state:
-    st.session_state.pais_input = ""  # limpiar input cuando se reinicia
+    st.session_state.pais_input = ""     # valor del text_input
+if "last_guess" not in st.session_state:
+    st.session_state.last_guess = ""     # último intento enviado
+if "trigger" not in st.session_state:
+    st.session_state.trigger = False     # bandera para procesar intento
 
 # Configuración
 st.set_page_config(layout="wide")
@@ -59,14 +59,13 @@ st.markdown(
     """
     <style>
     .block-container {
-        padding-top: 2.5rem;   /* default suele ser ~6rem, lo bajamos */
+        padding-top: 2.5rem;
         padding-bottom: 3rem;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
-
 
 # --- Encabezado con contador ---
 col1, col2 = st.columns([4, 1])
@@ -88,14 +87,18 @@ prioritarios = [
     # Hispanoamérica
     "Argentina","Bolivia","Chile","Colombia","Costa Rica","Cuba","Ecuador","El Salvador","Guatemala",
     "Honduras","Mexico","Nicaragua","Panama","Paraguay","Peru","Dominican Republic","Uruguay","Venezuela",
+    "Puerto Rico","Equatorial Guinea",
+    # Europa
     # Europa
     "Spain","France","Germany","Italy","Portugal","Netherlands","Belgium","Poland","Sweden","Norway","Finland","United Kingdom",
+    "Switzerland","Austria","Denmark","Ireland","Czech Republic","Hungary","Greece","Turkey","Ukraine","Romania","Bulgaria","Croatia","Serbia",
+
     # Otros
-    "Japan","China","Australia","South Africa","Morocco","Algeria","Tunisia","Egypt","Libya"
+    "Japan","China","Australia","South Africa","Morocco","Algeria","Tunisia","Egypt", "Libya"
 ]
 
 todos_los_paises = list(coords_dict.keys())
-pesos = [20 if p in prioritarios else 1 for p in todos_los_paises]
+pesos = [40 if p in prioritarios else 1 for p in todos_los_paises]
 
 # --- Botón para nuevo país ---
 if st.button("🎯 Nuevo país misterioso"):
@@ -105,20 +108,38 @@ if st.button("🎯 Nuevo país misterioso"):
     st.session_state.incorrectos = []
     st.session_state.pais_revelado = False
     st.session_state.pais_input = ""
+    st.session_state.last_guess = ""
+    st.session_state.trigger = False
     st.success("✅ Nuevo país misterioso elegido (oculto para ti).")
 
-# --- Entrada de intentos con formulario ---
-with st.form(key="intento_form", clear_on_submit=False):
-    cols = st.columns([4, 1])
-    with cols[0]:
-        pais_input = st.text_input("✍️ Escribe un país (en español o inglés):", key="pais_input")
-    with cols[1]:
-        submitted = st.form_submit_button("📨 Enviar")
+# --- Callback para enviar intento (enter o botón) ---
+def enviar_intento():
+    texto = st.session_state.pais_input.strip()
+    if not texto:
+        return
+    st.session_state.last_guess = texto   # guardamos lo escrito
+    st.session_state.pais_input = ""      # limpiamos el input
+    st.session_state.trigger = True       # marcamos para procesar en el cuerpo
 
-# Variables para mostrar mensajes
+# --- Entrada de intentos (sin form): enter y botón comparten callback ---
+cols_in = st.columns([4, 1])
+with cols_in[0]:
+    st.text_input(
+        "✍️ Escribe un país (en español o inglés):",
+        key="pais_input",
+        on_change=enviar_intento
+    )
+with cols_in[1]:
+    st.button("📨 Enviar", on_click=enviar_intento)
+
+# Variables para mensajes
 msg_idioma, msg_dist, msg_result = "", "", ""
 
-if submitted and pais_input:
+# --- Procesamiento del intento si hay trigger ---
+if st.session_state.trigger:
+    st.session_state.trigger = False
+    pais_input = st.session_state.last_guess
+
     if not st.session_state.pais_misterioso:
         msg_result = "Primero elige un país misterioso."
     else:
@@ -145,13 +166,13 @@ if submitted and pais_input:
             misterioso = st.session_state.pais_misterioso  # en inglés
             if nombre_en == misterioso:
                 # ¡Acierto!
-                color = [0, 180, 0, 0.9]  # verde intenso para acierto
+                color = [0, 180, 0, 0.9]  # verde intenso
                 msg_dist = "Distancia: 0 km"
                 msg_result = "¡Correcto!"
                 st.session_state.intentos.append({"name": nombre_en, "color": color})
                 st.balloons()
             else:
-                # Cálculo de distancia y color por tramos
+                # Distancia y color por tramos
                 dist = geodesic(coords_dict[nombre_en], coords_dict[misterioso]).km
                 max_dist = 11000
                 ratio = dist / max_dist
@@ -172,13 +193,16 @@ if submitted and pais_input:
                 msg_result = "No es correcto."
                 st.session_state.intentos.append({"name": nombre_en, "color": color})
 
-                if nombre_es_visto and nombre_es_visto not in st.session_state.incorrectos:
-                    st.session_state.incorrectos.append(nombre_es_visto)
-        else:
-            if not msg_result:
-                msg_result = "Ese país no está en el mapa o en el diccionario."
+                if nombre_es_visto:
+                    dist_km = int(dist)  # ya tienes la variable dist calculada
+                    # guardamos como (nombre, distancia)
+                    if not any(nombre_es_visto == x[0] for x in st.session_state.incorrectos):
+                        st.session_state.incorrectos.append((nombre_es_visto, dist_km))
 
-# --- Mostrar mensajes en una sola fila ---
+        else:
+            msg_result = "Ese país no está en el mapa o en el diccionario."
+
+# --- Mensajes en una fila ---
 cols_msg = st.columns(3)
 if msg_idioma:
     cols_msg[0].info(msg_idioma)
@@ -204,9 +228,8 @@ subset = world[world["name"].isin(paises_mostrados)]
 geojson_data = subset.drop(columns=["centroid"]).to_json()
 
 # 2) Qué colores usamos en esta vista (sin mutar estado):
-colores_vista = list(st.session_state.intentos)  # copia superficial
+colores_vista = list(st.session_state.intentos)
 if st.session_state.pais_revelado and st.session_state.pais_misterioso:
-    # por si alguna vez se filtró antes en intentos, lo sustituimos en la vista
     colores_vista = [i for i in colores_vista if i["name"] != st.session_state.pais_misterioso]
     colores_vista.append({"name": st.session_state.pais_misterioso, "color": [0, 180, 0, 0.85]})
 
@@ -220,10 +243,15 @@ html(html_final, height=650, scrolling=False)
 
 # --- Lista de incorrectos ---
 if st.session_state.incorrectos:
-    st.subheader("❌ Lista de países incorrectos:")
+    st.subheader("❌ Lista de países incorrectos (ordenados por cercanía):")
+
+    # ordenamos por distancia (más cercano primero)
+    ordenados = sorted(st.session_state.incorrectos, key=lambda x: x[1])
+
     cols = st.columns(4)
-    for idx, p in enumerate(st.session_state.incorrectos):
-        cols[idx % 4].write(p)
+    for idx, (pais, dist) in enumerate(ordenados):
+        cols[idx % 4].write(f"{pais} — {dist} km")
+
 
 # --- Botones al final ---
 if st.session_state.pais_misterioso:
@@ -231,7 +259,7 @@ if st.session_state.pais_misterioso:
     with col1:
         if st.button("👀 Mostrar / Ocultar respuesta correcta"):
             st.session_state.pais_revelado = not st.session_state.pais_revelado
-            # Limpieza defensiva: si ocultamos y por alguna razón quedó en intentos, lo sacamos
+            # Si ocultamos y por alguna razón quedó en intentos, lo sacamos
             if not st.session_state.pais_revelado and st.session_state.pais_misterioso:
                 st.session_state.intentos = [
                     i for i in st.session_state.intentos
